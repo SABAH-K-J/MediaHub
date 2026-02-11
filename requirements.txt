@@ -1,0 +1,10 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+sqlmodel==0.0.14
+pywebview==4.4.1
+cinemagoer==2023.5.1
+requests==2.31.0
+lxml==4.9.3
+python-multipart==0.0.6
+wikipedia-api==0.6.0
+pyinstaller==6.3.0
