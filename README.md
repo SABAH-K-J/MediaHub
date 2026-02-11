@@ -174,10 +174,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Your Name - [@yourtwitter](https://twitter.com/yourtwitter)
 
-Project Link: [https://github.com/yourusername/MediaHub](https://github.com/yourusername/MediaHub)
-
----
-
-Made with ❤️ and ☕
+Project Link: [https://github.com/SABAH-K-J/MediaHub](https://github.com/SABAH-K-J/MediaHub.git)
