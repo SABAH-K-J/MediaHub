@@ -1,70 +1,67 @@
-# MediaHub - Build Script
-# This script packages the MediaHub application into a standalone executable
+"""PyInstaller executable builder for MediaHub."""
 
-import PyInstaller.__main__
-import shutil
+from __future__ import annotations
+
 import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
-def build():
-    """Build MediaHub executable using PyInstaller"""
-    
-    print("=" * 60)
-    print("Building MediaHub Windows Application")
-    print("=" * 60)
-    
-    # Check if frontend is built
-    if not os.path.exists('frontend/dist'):
-        print("\n❌ ERROR: Frontend not built!")
-        print("Please run: cd frontend && npm run build")
-        return False
-    
-    # Clean previous builds
-    print("\n🧹 Cleaning previous builds...")
-    if os.path.exists('dist'):
-        shutil.rmtree('dist')
-    if os.path.exists('build'):
-        shutil.rmtree('build')
-    
-    # PyInstaller arguments
-    print("\n📦 Packaging application...")
-    args = [
-        'backend/main.py',  # Entry point
-        '--name=MediaHub',  # Executable name
-        '--onefile',  # Single executable
-        '--windowed',  # No console window (GUI only)
-        '--add-data=frontend/dist;frontend/dist',  # Include frontend build
-        '--hidden-import=uvicorn.logging',
-        '--hidden-import=uvicorn.loops',
-        '--hidden-import=uvicorn.loops.auto',
-        '--hidden-import=uvicorn.protocols',
-        '--hidden-import=uvicorn.protocols.http',
-        '--hidden-import=uvicorn.protocols.http.auto',
-        '--hidden-import=uvicorn.protocols.websockets',
-        '--hidden-import=uvicorn.protocols.websockets.auto',
-        '--hidden-import=uvicorn.lifespan',
-        '--hidden-import=uvicorn.lifespan.on',
-        '--collect-all=fastapi',
-        '--collect-all=sqlmodel',
-        '--collect-all=cinemagoer',
-        '--collect-all=lxml',
-        '--noconfirm',  # Overwrite without asking
+ROOT_DIR = Path(__file__).resolve().parent
+
+
+def build_exe() -> None:
+    print("Building MediaHub standalone executable...")
+
+    frontend_dist = ROOT_DIR / "frontend" / "dist"
+    if not frontend_dist.is_dir():
+        print("Error: frontend/dist not found! Build the frontend first:", file=sys.stderr)
+        print("  cd frontend && npm run build", file=sys.stderr)
+        sys.exit(1)
+
+    for folder in ("dist", "build"):
+        target = ROOT_DIR / folder
+        if target.exists():
+            print(f"Cleaning {folder}/...")
+            shutil.rmtree(target)
+
+    add_data_arg = f"{frontend_dist}{os.pathsep}frontend/dist"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "backend/main.py",
+        "--name=MediaHub",
+        "--onefile",
+        "--windowed",
+        f"--add-data={add_data_arg}",
+        "--hidden-import=uvicorn.logging",
+        "--hidden-import=uvicorn.loops",
+        "--hidden-import=uvicorn.loops.auto",
+        "--hidden-import=uvicorn.protocols",
+        "--hidden-import=uvicorn.protocols.http",
+        "--hidden-import=uvicorn.protocols.http.auto",
+        "--hidden-import=uvicorn.protocols.websockets",
+        "--hidden-import=uvicorn.protocols.websockets.auto",
+        "--hidden-import=uvicorn.lifespan",
+        "--hidden-import=uvicorn.lifespan.on",
+        "--hidden-import=dotenv",
+        "--collect-all=fastapi",
+        "--collect-all=sqlmodel",
+        "--collect-all=pydantic",
+        "--collect-all=webview",
     ]
-    
-    # Add icon if exists
-    if os.path.exists('icon.ico'):
-        args.append('--icon=icon.ico')
-    
-    try:
-        PyInstaller.__main__.run(args)
-        print("\n✅ Build complete!")
-        print(f"\n📂 Executable location: {os.path.abspath('dist/MediaHub.exe')}")
-        print("\n🎉 You can now run MediaHub.exe as a standalone application!")
-        return True
-    except Exception as e:
-        print(f"\n❌ Build failed: {e}")
-        return False
 
-if __name__ == '__main__':
-    build()
+    icon_path = ROOT_DIR / "icon.ico"
+    if icon_path.is_file():
+        cmd.append(f"--icon={icon_path}")
 
+    subprocess.run(cmd, cwd=str(ROOT_DIR), check=True)
+    exe_name = "MediaHub.exe" if os.name == "nt" else "MediaHub"
+    print(f"Build complete! Binary location: {ROOT_DIR / 'dist' / exe_name}")
+
+
+if __name__ == "__main__":
+    build_exe()

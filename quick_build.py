@@ -1,48 +1,33 @@
-# MediaHub - Quick Build Script
-# Builds frontend and packages the application
+"""One-step build script: builds frontend bundle then packages MediaHub executable."""
 
+from __future__ import annotations
+
+import os
+import shutil
 import subprocess
 import sys
-import os
+from pathlib import Path
 
-def main():
-    print("🎬 Building MediaHub Windows Application")
+ROOT_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = ROOT_DIR / "frontend"
+
+
+def main() -> None:
+    npm_bin = shutil.which("npm.cmd" if os.name == "nt" else "npm") or shutil.which("npm")
+    if not npm_bin:
+        print("Error: npm not found on PATH.", file=sys.stderr)
+        sys.exit(1)
+
     print("=" * 60)
-    
-    # Step 1: Build Frontend
-    print("\n📦 Step 1/2: Building frontend...")
-    try:
-        result = subprocess.run(
-            ["npm", "run", "build"],
-            cwd="frontend",
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        print("✅ Frontend built successfully!")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Frontend build failed: {e}")
-        print(e.stderr)
-        return False
-    
-    # Step 2: Build Executable
-    print("\n📦 Step 2/2: Building executable...")
-    try:
-        subprocess.run([sys.executable, "build.py"], check=True)
-        print("\n" + "=" * 60)
-        print("🎉 SUCCESS! MediaHub.exe is ready!")
-        print("=" * 60)
-        print(f"\n📂 Location: {os.path.abspath('dist/MediaHub.exe')}")
-        print("\n💡 You can now:")
-        print("   1. Run MediaHub.exe directly")
-        print("   2. Move it anywhere on your system")
-        print("   3. Create a desktop shortcut")
-        print("   4. Share it with others (they don't need Python!)")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Executable build failed: {e}")
-        return False
+    print("MediaHub Quick Build")
+    print("=" * 60)
 
-if __name__ == '__main__':
+    print("\n[1/2] Building React frontend...")
+    subprocess.run([npm_bin, "run", "build"], cwd=str(FRONTEND_DIR), check=True)
+
+    print("\n[2/2] Packaging standalone executable...")
+    subprocess.run([sys.executable, "build.py"], cwd=str(ROOT_DIR), check=True)
+
+
+if __name__ == "__main__":
     main()

@@ -1,0 +1,19 @@
+services:
+  mediahub:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      MEDIAHUB_HOST: "0.0.0.0"
+      MEDIAHUB_PORT: "8000"
+      MEDIAHUB_DB_PATH: "/data/library.db"
+      MEDIAHUB_THUMBNAILS_DIR: "/data/thumbnails"
+      MEDIAHUB_CORS_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
+    volumes:
+      - mediahub_data:/data
+      # Mount your local media folder read-only into /media:
+      # - ./my-videos:/media:ro
+
+volumes:
+  mediahub_data:
+

@@ -1,151 +1,278 @@
-import requests
-import re
-from imdb import Cinemagoer
+"""Media metadata and thumbnail extraction via ffprobe and ffmpeg."""
 
-ia = Cinemagoer()
+from __future__ import annotations
 
-def clean_title_for_search(title: str) -> str:
-    # Remove release year (e.g. (2022) or 2022)
-    title = re.sub(r'[\(\[\{]?\d{4}[\)\]\}]?', '', title)
-    title = re.sub(r'(1080p|720p|480p|BluRay|WEB-DL|x264|x265|HEVC|AAC|Hindi|English|ESub).*', '', title, flags=re.IGNORECASE)
-    title = title.replace('.', ' ').replace('_', ' ').strip()
-    return title
+import json
+import logging
+import os
+import shutil
+import subprocess
+import threading
+from pathlib import Path
+from typing import Optional
 
-from lxml import html
+from sqlalchemy import Engine
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
 
-def get_metadata_from_wikipedia(title):
-    """
-    Searches Wikipedia for the title and returns:
-    - imdb_id (str or None)
-    - poster_url (str or None)
-    """
-    try:
-        print(f"DEBUG: Wikipedia Searching: {title}")
-        search_url = "https://en.wikipedia.org/w/api.php"
-        params = {
-            "action": "opensearch",
-            "search": title,
-            "limit": 1,
-            "namespace": 0,
-            "format": "json"
-        }
-        headers = {
-            "User-Agent": "MediaHub/1.0 (contact@example.com)"
-        }
-        r = requests.get(search_url, params=params, headers=headers, timeout=10)
-        data = r.json()
-        
-        if not data[1]:
-            print("DEBUG: No Wikipedia results found.")
-            return None, None, None
-            
-        page_url = data[3][0]
-        print(f"DEBUG: Found Wikipedia Page: {page_url}")
-        
-        # Fetch page content
-        page_r = requests.get(page_url, headers=headers, timeout=10)
-        content = page_r.text
-        
-        # 1. Look for IMDb ID
-        imdb_id = None
-        match = re.search(r'imdb\.com/title/tt(\d+)', content)
-        if match:
-             imdb_id = match.group(1)
-             
-        # 2. Look for Poster & Genre in Infobox
-        poster_url = None
-        genres = None
-        try:
-            tree = html.fromstring(content)
-            
-            # Poster
-            img_src = tree.xpath('//table[contains(@class, "infobox")]//td[contains(@class, "infobox-image")]//img/@src')
-            if not img_src:
-                img_src = tree.xpath('//table[contains(@class, "infobox")]//img/@src')
-            
-            if img_src:
-                url = img_src[0]
-                if url.startswith('//'):
-                    url = "https:" + url
-                poster_url = url
-                print(f"DEBUG: Found Wikipedia Poster: {poster_url}")
-                
-            # Genre
-            # Ideally look for th with "Genre" and get next td
-            genre_td = tree.xpath('//table[contains(@class, "infobox")]//th[contains(text(), "Genre")]/../td')
-            if genre_td:
-                genres = genre_td[0].text_content().strip()
-                # Clean up footnotes [1][2] etc
-                genres = re.sub(r'\[\d+\]', '', genres)
-                print(f"DEBUG: Found Wikipedia Genres: {genres}")
-                
-        except Exception as e:
-            print(f"DEBUG: Wiki extract error: {e}")
-            
-        return imdb_id, poster_url, genres
-            
-    except Exception as e:
-        print(f"Wikipedia Search error: {e}")
-        
-    return None, None, None
+from backend.config import get_settings
+from backend.database import VideoProgress, get_engine
+from backend.security import canonicalize_path, normalize_for_compare
 
-def fetch_metadata(title: str, media_type: str = None):
-    try:
-        clean_title = clean_title_for_search(title)
-        print(f"DEBUG: Metadata lookup for: {clean_title} ({media_type})")
-        
-        imdb_id, wiki_poster, wiki_genres = get_metadata_from_wikipedia(clean_title)
-        
-        movie = None
-        if imdb_id:
-            print(f"DEBUG: Found IMDb ID: {imdb_id}")
-            try:
-                movie = ia.get_movie(imdb_id)
-            except Exception as e:
-                print(f"Error fetching movie by ID: {e}")
-        
-        # Fallback to direct search (which we know fails generally but keep as backup)
-        if not movie:
-             pass 
+logger = logging.getLogger(__name__)
 
-        if not movie and not wiki_poster and not wiki_genres:
-            print("DEBUG: No metadata found.")
-            return None
+_in_flight_lock = threading.Lock()
+_in_flight_paths: set[str] = set()
 
-        # Extract data
-        
-        description = None
-        rating = None
-        year = None
-        genres = None
-        imdb_poster = None
-        
-        if movie:
-             description = movie.get('plot outline') or (movie.get('plot')[0] if movie.get('plot') else None)
-             rating = movie.get('rating')
-             year = movie.get('year')
-             genres = ", ".join(movie.get('genres', [])) if movie.get('genres') else None
-             imdb_poster = movie.get('full-size cover url')
-             real_title = movie.get('title')
-        else:
-             real_title = clean_title
+_SUBPROCESS_TIMEOUT_SEC = 15
 
-        # Use Wiki content if IMDb is missing
-        final_poster = imdb_poster if imdb_poster else wiki_poster
-        final_genres = genres if genres else wiki_genres
 
-        metadata = {
-            "title": real_title,
-            "year": year,
-            "rating": rating,
-            "description": description,
-            "poster_url": final_poster,
-            "genres": final_genres
-        }
-        return metadata
+def generate_file_hash(file_path: str) -> str:
+    """Compute deterministic SHA-256 hex digest of normalized canonical file path."""
+    import hashlib
 
-    except Exception as e:
-        print(f"Error fetching metadata for {title}: {e}")
-        import traceback
-        traceback.print_exc()
+    normalized = normalize_for_compare(file_path)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _resolve_executable(configured: str) -> Optional[str]:
+    if os.path.isfile(configured):
+        return configured
+    return shutil.which(configured)
+
+
+def is_ffmpeg_available() -> bool:
+    """Return True if ffmpeg executable can be resolved."""
+    return _resolve_executable(get_settings().ffmpeg_executable) is not None
+
+
+def is_ffprobe_available() -> bool:
+    """Return True if ffprobe executable can be resolved."""
+    return _resolve_executable(get_settings().ffprobe_executable) is not None
+
+
+def _windows_startupinfo() -> Optional[subprocess.STARTUPINFO]:  # type: ignore[name-defined]
+    if os.name == "nt":
+        info = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
+        info.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
+        return info
+    return None
+
+
+def compute_seek_seconds(duration: Optional[float]) -> float:
+    """Compute a safe thumbnail seek timestamp clamped inside video duration."""
+    if duration is None or duration <= 0:
+        return 5.0
+    if duration <= 1.5:
+        return 0.0
+    if duration < 10.0:
+        return min(max(1.0, duration * 0.1), max(0.0, duration - 0.5))
+    return min(max(1.0, duration * 0.1), duration - 1.0)
+
+
+def _format_resolution(height: Optional[int]) -> Optional[str]:
+    if not height or height <= 0:
         return None
+    if height >= 2160:
+        return "4K"
+    if height >= 1440:
+        return "1440p"
+    if height >= 1080:
+        return "1080p"
+    if height >= 720:
+        return "720p"
+    if height >= 480:
+        return "480p"
+    return f"{height}p"
+
+
+def _probe_video(ffprobe_bin: str, file_path: str) -> tuple[Optional[float], Optional[str]]:
+    """Run ffprobe with timeout and return (duration_sec, resolution_label)."""
+    cmd = [
+        ffprobe_bin,
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height,duration:format=duration",
+        "-of",
+        "json",
+        file_path,
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_SUBPROCESS_TIMEOUT_SEC,
+            startupinfo=_windows_startupinfo(),
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("ffprobe failed for %s: %s", file_path, exc)
+        return None, None
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return None, None
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None, None
+
+    format_info = data.get("format") or {}
+    streams = data.get("streams") or []
+    stream_info = streams[0] if isinstance(streams, list) and streams else {}
+
+    duration: Optional[float] = None
+    dur_raw = format_info.get("duration") or stream_info.get("duration")
+    if dur_raw is not None:
+        try:
+            parsed = float(dur_raw)
+            if parsed > 0:
+                duration = parsed
+        except (TypeError, ValueError):
+            duration = None
+
+    height_raw = stream_info.get("height")
+    resolution: Optional[str] = None
+    if height_raw is not None:
+        try:
+            resolution = _format_resolution(int(height_raw))
+        except (TypeError, ValueError):
+            resolution = None
+
+    return duration, resolution
+
+
+def _generate_thumbnail(
+    ffmpeg_bin: str,
+    file_path: str,
+    thumb_path: Path,
+    duration: Optional[float],
+) -> bool:
+    """Capture one JPEG thumbnail frame with timeout. Return True on success."""
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    seek_sec = compute_seek_seconds(duration)
+    cmd = [
+        ffmpeg_bin,
+        "-y",
+        "-ss",
+        f"{seek_sec:.3f}",
+        "-i",
+        file_path,
+        "-frames:v",
+        "1",
+        "-q:v",
+        "2",
+        "-vf",
+        "scale=320:-1",
+        str(thumb_path),
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_SUBPROCESS_TIMEOUT_SEC,
+            startupinfo=_windows_startupinfo(),
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("ffmpeg failed for %s: %s", file_path, exc)
+        return False
+
+    return result.returncode == 0 and thumb_path.is_file() and thumb_path.stat().st_size > 0
+
+
+def extract_metadata_and_thumbnail(
+    file_path: str,
+    target_engine: Optional[Engine] = None,
+) -> None:
+    """Extract duration, resolution, size, and thumbnail for a video file safely."""
+    try:
+        canon_path = canonicalize_path(file_path)
+    except ValueError:
+        return
+
+    if not os.path.isfile(canon_path):
+        return
+
+    norm_key = normalize_for_compare(canon_path)
+    with _in_flight_lock:
+        if norm_key in _in_flight_paths:
+            return
+        _in_flight_paths.add(norm_key)
+
+    try:
+        settings = get_settings()
+        eng = target_engine or get_engine()
+        file_hash = generate_file_hash(canon_path)
+        thumb_path = settings.thumbnails_dir / f"{file_hash}.jpg"
+
+        with Session(eng) as session:
+            existing = session.get(VideoProgress, canon_path)
+            if (
+                existing
+                and existing.resolution
+                and existing.duration
+                and existing.size_bytes is not None
+                and existing.thumbnail_path
+                and os.path.isfile(existing.thumbnail_path)
+            ):
+                return
+
+        size_bytes: Optional[int] = None
+        try:
+            size_bytes = os.path.getsize(canon_path)
+        except OSError:
+            pass
+
+        duration: Optional[float] = None
+        resolution: Optional[str] = None
+        ffprobe_bin = _resolve_executable(settings.ffprobe_executable)
+        if ffprobe_bin:
+            duration, resolution = _probe_video(ffprobe_bin, canon_path)
+
+        ffmpeg_bin = _resolve_executable(settings.ffmpeg_executable)
+        if ffmpeg_bin and not thumb_path.is_file():
+            _generate_thumbnail(ffmpeg_bin, canon_path, thumb_path, duration)
+
+        with Session(eng) as session:
+            vp = session.get(VideoProgress, canon_path)
+            if vp is None:
+                vp = VideoProgress(file_path=canon_path, file_hash=file_hash)
+            else:
+                vp.file_hash = file_hash
+
+            if size_bytes is not None:
+                vp.size_bytes = size_bytes
+            if resolution:
+                vp.resolution = resolution
+            if duration and (vp.duration is None or vp.duration <= 0):
+                vp.duration = duration
+            if thumb_path.is_file():
+                vp.thumbnail_path = str(thumb_path)
+
+            session.add(vp)
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                retry_vp = session.get(VideoProgress, canon_path)
+                if retry_vp is not None:
+                    retry_vp.file_hash = file_hash
+                    if size_bytes is not None:
+                        retry_vp.size_bytes = size_bytes
+                    if resolution:
+                        retry_vp.resolution = resolution
+                    if duration and (retry_vp.duration is None or retry_vp.duration <= 0):
+                        retry_vp.duration = duration
+                    if thumb_path.is_file():
+                        retry_vp.thumbnail_path = str(thumb_path)
+                    session.add(retry_vp)
+                    session.commit()
+    finally:
+        with _in_flight_lock:
+            _in_flight_paths.discard(norm_key)

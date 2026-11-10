@@ -1,69 +1,37 @@
-# MediaHub Windows Application - Build Instructions
+# MediaHub Desktop Build Instructions
 
-## Quick Build (Recommended)
+## Quick Build
 
-Run this single command to build everything:
+Run this single command from the repository root to build the React/TypeScript frontend and package the standalone executable:
 
 ```bash
 python quick_build.py
 ```
 
-This will:
-1. Build the frontend (React/Vite)
-2. Package everything into MediaHub.exe
-
 ## Manual Build
 
-If you prefer to build step-by-step:
+### 1. Build Frontend
 
-### Step 1: Build Frontend
 ```bash
 cd frontend
 npm run build
 cd ..
 ```
 
-### Step 2: Build Executable
+### 2. Package Executable
+
 ```bash
 python build.py
 ```
 
-## After Building
+The packaged binary is written to `dist/MediaHub.exe` on Windows (or `dist/MediaHub` on Linux/macOS).
 
-Your executable will be at: `dist/MediaHub.exe`
+## Runtime Storage When Packaged
 
-You can:
-- ✅ Run it directly (double-click)
-- ✅ Move it anywhere on your computer
-- ✅ Create a desktop shortcut
-- ✅ Share it with others (no Python required!)
+When running as a frozen PyInstaller executable, MediaHub stores `library.db` and `.thumbnails/` in a writable user data directory (`%LOCALAPPDATA%\MediaHub` on Windows, `~/.local/share/mediahub` on POSIX) rather than inside the temporary `_MEIPASS` bundle directory. You can override these locations with `MEDIAHUB_DB_PATH` and `MEDIAHUB_THUMBNAILS_DIR`.
 
-## First Run
+## Requirements
 
-When you first run MediaHub.exe:
-1. Click "Scan Library"
-2. Enter the path to your media folder
-3. Wait for scanning to complete
-4. Enjoy your media!
-
-## Requirements for Building
-
-- Python 3.8+
-- Node.js 16+
-- All dependencies installed:
-  ```bash
-  pip install -r requirements.txt
-  cd frontend && npm install
-  ```
-
-## Troubleshooting
-
-**Build fails?**
-- Make sure all dependencies are installed
-- Check that frontend/dist exists after frontend build
-- Try deleting `build` and `dist` folders and rebuilding
-
-**Executable won't run?**
-- Windows Defender might block it (it's a new executable)
-- Right-click → Properties → Unblock
-- Or add an exception in Windows Security
+- Python `3.10+` (`pip install -r requirements.txt`)
+- Node.js `20+` (`cd frontend && npm install`)
+- Optional on host PATH: `ffmpeg`, `ffprobe`, and `mpv`
