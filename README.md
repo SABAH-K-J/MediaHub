@@ -75,16 +75,73 @@ Streamin-Serve/
 │   └── main.py          # PyWebView desktop & headless entrypoint
 ├── frontend/
 │   ├── src/
-│   │   ├── api/         # Zod schemas & typed fetch client
-│   │   ├── components/  # Sidebar, HeaderBar, MediaRow, Modals, Toasts
-│   │   ├── pages/       # Dashboard workspace
-│   │   └── utils/       # UTF-8 Base64 encoding & formatting helpers
-├── tests/backend/       # Pytest unit & integration suite
-├── Dockerfile           # Multi-stage non-root production container
-├── .github/workflows/ci.yml
-└── BUILD.md             # Desktop packaging instructions
+│   │   ├── components/  # React components
+│   │   ├── pages/       # Page components
+│   │   ├── api.js       # API client
+│   │   └── index.css    # Styles & animations
+│   └── dist/            # Production build
+├── build.py             # Build script
+├── quick_build.py       # One-command build
+├── launch.py            # Development launcher
+├── requirements.txt     # Python dependencies
+└── README.md
 ```
 
-## License
+## 🎨 Screenshots
 
-MIT — see [LICENSE](LICENSE).
+> Add screenshots of your application here
+
+## 📖 Documentation
+
+- [Build Instructions](BUILD.md) - Detailed build guide
+- [API Documentation](docs/API.md) - Backend API reference
+- [Contributing](CONTRIBUTING.md) - Contribution guidelines
+
+## 🔧 Configuration
+
+### Media Players
+
+MediaHub auto-detects VLC and PotPlayer. Ensure one is installed:
+- **VLC**: `C:\Program Files\VideoLAN\VLC\vlc.exe`
+- **PotPlayer**: `C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe`
+
+### Database
+
+SQLite database stored at `backend/library.db`. Delete to reset.
+
+## 🐛 Known Issues
+
+- Windows Defender may flag the executable (false positive)
+- Some media may not have metadata available
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [React](https://react.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Cinemagoer](https://cinemagoer.github.io/)
+- [PyWebView](https://pywebview.flowrl.com/)
+
+## 📧 Contact
+
+Your Name - [@yourtwitter](https://twitter.com/yourtwitter)
+
+Project Link: [https://github.com/yourusername/MediaHub](https://github.com/yourusername/MediaHub)
+
+---
+
+Made with ❤️ and ☕
