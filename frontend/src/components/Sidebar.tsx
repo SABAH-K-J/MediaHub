@@ -1,7 +1,15 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Folder, FolderPlus, Play, Trash2, X } from 'lucide-react';
+import { Folder, FolderOpen, FolderPlus, Play, Trash2, X } from 'lucide-react';
 import { LastWatchedItem, LibraryRoot, RootPathInputSchema } from '../api/schemas';
 import { formatDuration, formatPercent, resolveAssetUrl } from '../utils/format';
+
+interface PyWebViewWindow extends Window {
+  pywebview?: {
+    api?: {
+      pick_folder?: () => Promise<string | null>;
+    };
+  };
+}
 
 interface SidebarProps {
   roots: LibraryRoot[];
@@ -33,6 +41,20 @@ export function Sidebar({
   const [submitting, setSubmitting] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [hasDesktopPicker, setHasDesktopPicker] = useState<boolean>(() =>
+    Boolean((window as PyWebViewWindow).pywebview?.api?.pick_folder),
+  );
+
+  useEffect(() => {
+    const checkBridge = () => {
+      if ((window as PyWebViewWindow).pywebview?.api?.pick_folder) {
+        setHasDesktopPicker(true);
+      }
+    };
+    checkBridge();
+    window.addEventListener('pywebviewready', checkBridge);
+    return () => window.removeEventListener('pywebviewready', checkBridge);
+  }, []);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -72,6 +94,24 @@ export function Sidebar({
       setConfirmDeleteId(null);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleDesktopBrowse = async () => {
+    const picker = (window as PyWebViewWindow).pywebview?.api?.pick_folder;
+    if (!picker) return;
+    setValidationError(null);
+    setSubmitting(true);
+    try {
+      const picked = await picker();
+      if (picked) {
+        await onAddRoot(picked);
+        setNewPath('');
+      }
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : 'Unable to add library folder.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -124,6 +164,17 @@ export function Sidebar({
               <span className="hidden sm:inline">{submitting ? 'Adding' : 'Add'}</span>
             </button>
           </div>
+          {hasDesktopPicker && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void handleDesktopBrowse()}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#232730] bg-[#0c0d10] px-3 text-xs font-medium text-[#f3f4f6] transition-colors hover:border-[#323744] hover:bg-[#21252e] disabled:opacity-50"
+            >
+              <FolderOpen className="h-3.5 w-3.5 text-[#f97316]" aria-hidden="true" />
+              <span>Browse Computer Folder…</span>
+            </button>
+          )}
           {validationError && (
             <p id="root-path-error" role="alert" className="text-xs text-[#ef4444]">
               {validationError}

@@ -1,6 +1,5 @@
 .git
 .github
-.antigravity
 .pytest_cache
 .mypy_cache
 .ruff_cache

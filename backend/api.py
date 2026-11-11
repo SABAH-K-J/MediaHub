@@ -1,4 +1,4 @@
-"""FastAPI application and HTTP endpoints for MediaHub."""
+"""FastAPI application and HTTP endpoints for CameoDist."""
 
 from __future__ import annotations
 
@@ -18,7 +18,23 @@ from sqlmodel import Session, select
 
 from backend import __version__
 from backend.config import get_bundle_root, get_settings
-from backend.database import LibraryRoot, VideoProgress, create_db_and_tables, get_engine, get_session
+from backend.database import (
+    LibraryRoot,
+    VideoProgress,
+    create_db_and_tables,
+    get_engine,
+    get_session,
+    utc_now,
+)
+from backend.media_streams import (
+    AudioTrackInfo,
+    ChapterInfo,
+    SubtitleTrackInfo,
+    extract_subtitle_payload,
+    find_adjacent_episodes,
+    inspect_media_streams,
+    stream_transcoded_video,
+)
 from backend.metadata import (
     extract_metadata_and_thumbnail,
     generate_file_hash,
@@ -65,7 +81,7 @@ class LibraryRootRead(StrictModel):
     id: int
     path: str
     label: Optional[str]
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 class DeleteRootResponse(StrictModel):
@@ -120,6 +136,29 @@ class FileProgressRequest(StrictModel):
     duration_sec: Optional[float] = Field(default=None, ge=0.0)
 
 
+class FilePreferencesRequest(StrictModel):
+    file_path: str = Field(min_length=1, max_length=8192)
+    preferred_audio_index: Optional[int] = Field(default=None, ge=0)
+    preferred_subtitle_id: Optional[str] = Field(default=None, max_length=256)
+
+
+class MediaInfoResponse(StrictModel):
+    file_path: str
+    duration: Optional[float] = None
+    container_ext: str
+    video_codec: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    can_direct_play: bool
+    audio_tracks: list[AudioTrackInfo]
+    subtitle_tracks: list[SubtitleTrackInfo]
+    chapters: list[ChapterInfo]
+    preferred_audio_index: Optional[int] = None
+    preferred_subtitle_id: Optional[str] = None
+    prev_item: Optional[BrowseItem] = None
+    next_item: Optional[BrowseItem] = None
+
+
 class VideoProgressRead(StrictModel):
     file_path: str
     file_hash: str
@@ -131,6 +170,8 @@ class VideoProgressRead(StrictModel):
     resolution: Optional[str] = None
     size_bytes: Optional[int] = None
     thumbnail_url: Optional[str] = None
+    preferred_audio_index: Optional[int] = None
+    preferred_subtitle_id: Optional[str] = None
 
 
 class PlayResponse(StrictModel):
@@ -173,6 +214,60 @@ def _decode_and_authorize_path(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _authorize_video_file(encoded_path: str, session: Session) -> str:
+    canon_path = _decode_and_authorize_path(encoded_path, session)
+    if not os.path.isfile(canon_path) or not is_allowed_video(canon_path):
+        raise HTTPException(status_code=404, detail="Video file not found on disk")
+    return canon_path
+
+
+def _build_browse_item(
+    display_name: str,
+    file_canon: str,
+    vp: Optional[VideoProgress],
+) -> BrowseItem:
+    if vp is not None:
+        file_hash = vp.file_hash or generate_file_hash(file_canon)
+        thumb_url = (
+            f"/api/thumbnails/{file_hash}"
+            if (vp.thumbnail_path and os.path.isfile(vp.thumbnail_path))
+            else None
+        )
+        return BrowseItem(
+            name=display_name,
+            path=file_canon,
+            is_dir=False,
+            watched=vp.watched,
+            progress_ratio=vp.progress_ratio,
+            last_position_sec=vp.last_position_sec,
+            resolution=vp.resolution,
+            duration=vp.duration,
+            size_bytes=vp.size_bytes,
+            watch_date=vp.watch_date,
+            thumbnail_url=thumb_url,
+        )
+
+    try:
+        size_bytes: Optional[int] = os.path.getsize(file_canon)
+    except OSError:
+        size_bytes = None
+    return BrowseItem(
+        name=display_name,
+        path=file_canon,
+        is_dir=False,
+        size_bytes=size_bytes,
+    )
+
+
+def _to_library_root_read(root: LibraryRoot) -> LibraryRootRead:
+    return LibraryRootRead(
+        id=root.id or 0,
+        path=root.path,
+        label=root.label or os.path.basename(root.path) or root.path,
+        created_at=root.created_at or utc_now(),
+    )
+
+
 def _to_video_progress_read(vp: VideoProgress) -> VideoProgressRead:
     thumb_url: Optional[str] = None
     if vp.thumbnail_path and os.path.isfile(vp.thumbnail_path) and vp.file_hash:
@@ -188,6 +283,8 @@ def _to_video_progress_read(vp: VideoProgress) -> VideoProgressRead:
         resolution=vp.resolution,
         size_bytes=vp.size_bytes,
         thumbnail_url=thumb_url,
+        preferred_audio_index=vp.preferred_audio_index,
+        preferred_subtitle_id=vp.preferred_subtitle_id,
     )
 
 
@@ -291,7 +388,7 @@ async def lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    application = FastAPI(title="MediaHub API", version=__version__, lifespan=lifespan)
+    application = FastAPI(title="CameoDist API", version=__version__, lifespan=lifespan)
 
     application.add_middleware(
         CORSMiddleware,
@@ -325,15 +422,7 @@ def create_app() -> FastAPI:
     @application.get("/api/roots", response_model=list[LibraryRootRead])
     def get_roots(session: Session = Depends(get_session)) -> list[LibraryRootRead]:
         roots = session.exec(select(LibraryRoot).order_by(LibraryRoot.id)).all()
-        return [
-            LibraryRootRead(
-                id=root.id or 0,
-                path=root.path,
-                label=root.label or os.path.basename(root.path) or root.path,
-                created_at=root.created_at,
-            )
-            for root in roots
-        ]
+        return [_to_library_root_read(root) for root in roots]
 
     @application.post("/api/roots", response_model=LibraryRootRead)
     def add_root(
@@ -354,12 +443,7 @@ def create_app() -> FastAPI:
         for existing in existing_roots:
             if normalize_for_compare(existing.path) == norm_target:
                 response.status_code = 200
-                return LibraryRootRead(
-                    id=existing.id or 0,
-                    path=existing.path,
-                    label=existing.label or os.path.basename(existing.path) or existing.path,
-                    created_at=existing.created_at,
-                )
+                return _to_library_root_read(existing)
 
         clean_label = sanitize_display_name(req.label.strip()) if req.label else None
         new_root = LibraryRoot(
@@ -370,12 +454,7 @@ def create_app() -> FastAPI:
         session.commit()
         session.refresh(new_root)
         response.status_code = 201
-        return LibraryRootRead(
-            id=new_root.id or 0,
-            path=new_root.path,
-            label=new_root.label,
-            created_at=new_root.created_at,
-        )
+        return _to_library_root_read(new_root)
 
     @application.delete("/api/roots/{root_id}", response_model=DeleteRootResponse)
     def delete_root(root_id: int, session: Session = Depends(get_session)) -> DeleteRootResponse:
@@ -453,39 +532,7 @@ def create_app() -> FastAPI:
             prog_map = {p.file_path: p for p in progress_records}
 
             for display_name, file_canon in raw_files:
-                vp = prog_map.get(file_canon)
-                if vp is not None:
-                    file_hash = vp.file_hash or generate_file_hash(file_canon)
-                    thumb_url = (
-                        f"/api/thumbnails/{file_hash}"
-                        if (vp.thumbnail_path and os.path.isfile(vp.thumbnail_path))
-                        else None
-                    )
-                    item = BrowseItem(
-                        name=display_name,
-                        path=file_canon,
-                        is_dir=False,
-                        watched=vp.watched,
-                        progress_ratio=vp.progress_ratio,
-                        last_position_sec=vp.last_position_sec,
-                        resolution=vp.resolution,
-                        duration=vp.duration,
-                        size_bytes=vp.size_bytes,
-                        watch_date=vp.watch_date,
-                        thumbnail_url=thumb_url,
-                    )
-                else:
-                    try:
-                        size_bytes = os.path.getsize(file_canon)
-                    except OSError:
-                        size_bytes = None
-                    item = BrowseItem(
-                        name=display_name,
-                        path=file_canon,
-                        is_dir=False,
-                        size_bytes=size_bytes,
-                    )
-
+                item = _build_browse_item(display_name, file_canon, prog_map.get(file_canon))
                 if _matches_status(item, status):
                     file_items.append(item)
 
@@ -599,10 +646,106 @@ def create_app() -> FastAPI:
         path: str = Query(..., min_length=1),
         session: Session = Depends(get_session),
     ) -> Response:
-        canon_path = _decode_and_authorize_path(path, session)
-        if not os.path.isfile(canon_path) or not is_allowed_video(canon_path):
-            raise HTTPException(status_code=404, detail="Video file not found on disk")
+        canon_path = _authorize_video_file(path, session)
         return stream_video_file(canon_path, request.headers.get("range"))
+
+    @application.get("/api/media/info", response_model=MediaInfoResponse)
+    def get_media_info(
+        path: str = Query(..., min_length=1),
+        session: Session = Depends(get_session),
+    ) -> MediaInfoResponse:
+        canon_path = _authorize_video_file(path, session)
+        info = inspect_media_streams(canon_path)
+        vp = session.get(VideoProgress, canon_path)
+
+        prev_path, next_path = find_adjacent_episodes(canon_path)
+        prev_item = (
+            _build_browse_item(
+                sanitize_display_name(os.path.basename(prev_path)),
+                prev_path,
+                session.get(VideoProgress, prev_path),
+            )
+            if prev_path
+            else None
+        )
+        next_item = (
+            _build_browse_item(
+                sanitize_display_name(os.path.basename(next_path)),
+                next_path,
+                session.get(VideoProgress, next_path),
+            )
+            if next_path
+            else None
+        )
+
+        return MediaInfoResponse(
+            file_path=info.file_path,
+            duration=info.duration or (vp.duration if vp else None),
+            container_ext=info.container_ext,
+            video_codec=info.video_codec,
+            width=info.width,
+            height=info.height,
+            can_direct_play=info.can_direct_play,
+            audio_tracks=info.audio_tracks,
+            subtitle_tracks=info.subtitle_tracks,
+            chapters=info.chapters,
+            preferred_audio_index=vp.preferred_audio_index if vp else None,
+            preferred_subtitle_id=vp.preferred_subtitle_id if vp else None,
+            prev_item=prev_item,
+            next_item=next_item,
+        )
+
+    @application.get("/api/subtitles")
+    def get_subtitles(
+        path: str = Query(..., min_length=1),
+        id: str = Query(..., min_length=1, max_length=256),
+        format: Literal["vtt", "ass"] = Query(default="vtt"),
+        session: Session = Depends(get_session),
+    ) -> Response:
+        canon_path = _authorize_video_file(path, session)
+        try:
+            payload = extract_subtitle_payload(canon_path, id, output_format=format)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        media_type = "text/plain; charset=utf-8" if format == "ass" else "text/vtt; charset=utf-8"
+        return Response(content=payload, media_type=media_type)
+
+    @application.get("/api/stream/transcode")
+    def stream_transcoded(
+        path: str = Query(..., min_length=1),
+        audio: int = Query(default=0, ge=0, le=64),
+        start: float = Query(default=0.0, ge=0.0),
+        session: Session = Depends(get_session),
+    ) -> Response:
+        canon_path = _authorize_video_file(path, session)
+        try:
+            return stream_transcoded_video(canon_path, audio_index=audio, start_sec=start)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @application.post("/api/file/preferences", response_model=VideoProgressRead)
+    def save_file_preferences(
+        req: FilePreferencesRequest,
+        session: Session = Depends(get_session),
+    ) -> VideoProgressRead:
+        canon_path = _authorize_video_file(req.file_path, session)
+        file_hash = generate_file_hash(canon_path)
+        vp = session.get(VideoProgress, canon_path)
+        if vp is None:
+            vp = VideoProgress(file_path=canon_path, file_hash=file_hash)
+        else:
+            vp.file_hash = file_hash
+
+        vp.preferred_audio_index = req.preferred_audio_index
+        vp.preferred_subtitle_id = req.preferred_subtitle_id
+        session.add(vp)
+        session.commit()
+        session.refresh(vp)
+        return _to_video_progress_read(vp)
 
     @application.post("/api/file/progress", response_model=VideoProgressRead)
     def sync_file_progress(

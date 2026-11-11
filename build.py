@@ -1,4 +1,4 @@
-"""PyInstaller executable builder for MediaHub."""
+"""PyInstaller executable builder for CameoDist."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ ROOT_DIR = Path(__file__).resolve().parent
 
 
 def build_exe() -> None:
-    print("Building MediaHub standalone executable...")
+    print("Building CameoDist standalone executable...")
 
     frontend_dist = ROOT_DIR / "frontend" / "dist"
     if not frontend_dist.is_dir():
@@ -33,7 +33,7 @@ def build_exe() -> None:
         "-m",
         "PyInstaller",
         "backend/main.py",
-        "--name=MediaHub",
+        "--name=CameoDist",
         "--onefile",
         "--windowed",
         f"--add-data={add_data_arg}",
@@ -48,10 +48,13 @@ def build_exe() -> None:
         "--hidden-import=uvicorn.lifespan",
         "--hidden-import=uvicorn.lifespan.on",
         "--hidden-import=dotenv",
+        "--hidden-import=mpv_jsonipc",
+        "--hidden-import=pythonnet",
         "--collect-all=fastapi",
         "--collect-all=sqlmodel",
         "--collect-all=pydantic",
         "--collect-all=webview",
+        "--collect-all=clr_loader",
     ]
 
     icon_path = ROOT_DIR / "icon.ico"
@@ -59,7 +62,7 @@ def build_exe() -> None:
         cmd.append(f"--icon={icon_path}")
 
     subprocess.run(cmd, cwd=str(ROOT_DIR), check=True)
-    exe_name = "MediaHub.exe" if os.name == "nt" else "MediaHub"
+    exe_name = "CameoDist.exe" if os.name == "nt" else "CameoDist"
     print(f"Build complete! Binary location: {ROOT_DIR / 'dist' / exe_name}")
 
 

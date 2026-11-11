@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   ChevronRight,
-  Film,
   Menu,
   Search,
   Settings,
@@ -14,6 +13,7 @@ import {
   HealthStatus,
   PlayerPreference,
 } from '../api/schemas';
+import { CameoDistLogo } from './CameoDistLogo';
 
 interface HeaderBarProps {
   breadcrumbs: BreadcrumbItem[];
@@ -55,12 +55,12 @@ export function HeaderBar({
 }: HeaderBarProps) {
   const effectivePlayerLabel =
     playerPref === 'browser'
-      ? 'Browser'
+      ? 'CameoDist Player'
       : playerPref === 'mpv'
         ? 'mpv'
         : health?.mpv_available
           ? 'Auto (mpv)'
-          : 'Auto (Browser)';
+          : 'Auto (Player)';
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#232730] bg-[#0c0d10]/95 backdrop-blur-sm">
@@ -77,12 +77,10 @@ export function HeaderBar({
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#15171c] border border-[#232730] text-[#f97316]">
-                <Film className="h-4 w-4" aria-hidden="true" />
-              </span>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <CameoDistLogo className="h-8 w-8 shrink-0" />
               <h1 className="text-base font-semibold tracking-tight text-[#f3f4f6]">
-                MediaHub
+                CameoDist
               </h1>
             </div>
 

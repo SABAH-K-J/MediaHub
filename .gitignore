@@ -20,6 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 *.manifest
+*.spec
 venv/
 env/
 .venv/
@@ -32,7 +33,7 @@ env/
 htmlcov/
 coverage/
 
-# Databases & MediaHub Runtime Data
+# Databases & CameoDist Runtime Data
 *.db
 *.db-shm
 *.db-wal
@@ -42,6 +43,7 @@ library.db
 .thumbnails/
 backend/thumbnails/
 data/
+cameodist.log
 
 # Environment & Secrets
 .env
@@ -55,6 +57,21 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/coverage/
 *.local
+*.tsbuildinfo
+.eslintcache
+
+# AI Assistants & Generated Agent Artifacts
+.antigravity/
+.impeccable/
+.claude/
+.cursor/
+.codex/
+.gemini/
+.agent/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+walkthrough.md
 
 # IDE & OS
 .vscode/*
@@ -62,7 +79,10 @@ frontend/coverage/
 .idea/
 *.swp
 *.swo
+*.tmp
+*.bak
+*.orig
 .DS_Store
 Thumbs.db
+desktop.ini
 *.log
-*.tmp

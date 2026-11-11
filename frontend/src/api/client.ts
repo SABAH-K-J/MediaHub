@@ -13,6 +13,8 @@ import {
   LibraryRoot,
   LibraryRootSchema,
   LibraryRootsListSchema,
+  MediaInfo,
+  MediaInfoSchema,
   NullableLastWatchedSchema,
   PlayProgress,
   PlayProgressSchema,
@@ -169,5 +171,59 @@ export function markAsUnwatched(filePath: string): Promise<VideoProgress> {
   return requestJson('/api/file/unwatch', VideoProgressSchema, {
     method: 'POST',
     body: JSON.stringify({ file_path: encodePathB64(filePath) }),
+  });
+}
+
+export function getMediaInfo(filePath: string, signal?: AbortSignal): Promise<MediaInfo> {
+  const params = new URLSearchParams({ path: encodePathB64(filePath) });
+  return requestJson(`/api/media/info?${params.toString()}`, MediaInfoSchema, {
+    method: 'GET',
+    signal,
+  });
+}
+
+export async function getSubtitleVtt(
+  filePath: string,
+  trackId: string,
+  signal?: AbortSignal,
+  format: 'vtt' | 'ass' = 'vtt',
+): Promise<string> {
+  const base = resolveApiBase();
+  const params = new URLSearchParams({
+    path: encodePathB64(filePath),
+    id: trackId,
+    format,
+  });
+  const response = await fetch(`${base}/api/subtitles?${params.toString()}`, {
+    method: 'GET',
+    signal,
+  });
+  if (!response.ok) {
+    let detail = `Subtitle request failed (${response.status})`;
+    try {
+      const errBody = (await response.json()) as { detail?: unknown };
+      if (typeof errBody?.detail === 'string' && errBody.detail.trim()) {
+        detail = errBody.detail;
+      }
+    } catch {
+      // Ignore non-JSON error bodies
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return response.text();
+}
+
+export function saveFilePreferences(
+  filePath: string,
+  preferredAudioIndex: number | null,
+  preferredSubtitleId: string | null,
+): Promise<VideoProgress> {
+  return requestJson('/api/file/preferences', VideoProgressSchema, {
+    method: 'POST',
+    body: JSON.stringify({
+      file_path: encodePathB64(filePath),
+      preferred_audio_index: preferredAudioIndex,
+      preferred_subtitle_id: preferredSubtitleId,
+    }),
   });
 }

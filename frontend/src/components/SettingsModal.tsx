@@ -12,19 +12,20 @@ interface SettingsModalProps {
 
 const PREF_OPTIONS: { value: PlayerPreference; label: string; description: string }[] = [
   {
+    value: 'browser',
+    label: 'CameoDist Player (Recommended)',
+    description:
+      'Integrated Screening Room player with multi-audio, subtitles, chapters, and auto-skip.',
+  },
+  {
     value: 'auto',
-    label: 'Auto (Recommended)',
-    description: 'Uses external mpv when installed on host, otherwise streams in browser.',
+    label: 'Auto (External mpv, else CameoDist Player)',
+    description: 'Uses external mpv when installed on host, otherwise opens CameoDist Player.',
   },
   {
     value: 'mpv',
     label: 'External mpv',
-    description: 'Launches local mpv with IPC position sync. Offers browser fallback if missing.',
-  },
-  {
-    value: 'browser',
-    label: 'In-Browser Player',
-    description: 'Streams directly via HTTP byte-range playback inside MediaHub.',
+    description: 'Launches local mpv with IPC position sync. Falls back to CameoDist Player if missing.',
   },
 ];
 

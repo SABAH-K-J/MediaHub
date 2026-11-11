@@ -1,4 +1,4 @@
-# MediaHub (`Streamin-Serve`)
+# CameoDist (`Streamin-Serve`)
 
 A self-contained, local-first media library manager and player workspace built with **FastAPI**, **SQLModel**, **React 18**, **TypeScript**, and **Tailwind CSS v4**.
 
@@ -43,7 +43,7 @@ A self-contained, local-first media library manager and player workspace built w
 docker compose up --build
 ```
 
-Edit `docker-compose.yml` to mount your local video directory into `/media:ro`, then add `/media` in the MediaHub sidebar.
+Edit `docker-compose.yml` to mount your local video directory into `/media:ro`, then add `/media` in the CameoDist sidebar.
 
 ## Testing & Quality Checks
 

@@ -20,6 +20,27 @@
 }
 
 @layer base {
+  @font-face {
+    font-family: "Gotham";
+    src: local("Gotham Book"), local("Gotham-Book"), local("Gotham Regular"), local("Gotham");
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  @font-face {
+    font-family: "Gotham";
+    src: local("Gotham Medium"), local("Gotham-Medium");
+    font-weight: 500 600;
+    font-style: normal;
+  }
+
+  @font-face {
+    font-family: "Gotham";
+    src: local("Gotham Bold"), local("Gotham-Bold");
+    font-weight: 700;
+    font-style: normal;
+  }
+
   :root {
     color-scheme: dark;
   }
@@ -55,6 +76,40 @@
 .tabular-timecode {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.font-subtitle-gotham {
+  font-family: "Gotham", "Montserrat", "Century Gothic", "Avenir Next", "Trebuchet MS", sans-serif;
+}
+
+.font-subtitle-sans {
+  font-family: var(--font-sans);
+}
+
+.font-subtitle-serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.font-subtitle-mono {
+  font-family: var(--font-mono);
+}
+
+.subtitle-outline-thin {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2px rgba(0, 0, 0, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.subtitle-outline-medium {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3.5px rgba(0, 0, 0, 0.96);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+}
+
+.subtitle-outline-heavy {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 5.5px rgba(0, 0, 0, 1);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 1);
 }
 
 /* Subtle dark-room scrollbars matching the surface palette */

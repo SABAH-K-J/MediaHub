@@ -1,4 +1,4 @@
-# MediaHub Desktop Build Instructions
+# CameoDist Desktop Build Instructions
 
 ## Quick Build
 
@@ -24,11 +24,11 @@ cd ..
 python build.py
 ```
 
-The packaged binary is written to `dist/MediaHub.exe` on Windows (or `dist/MediaHub` on Linux/macOS).
+The packaged binary is written to `dist/CameoDist.exe` on Windows (or `dist/CameoDist` on Linux/macOS).
 
 ## Runtime Storage When Packaged
 
-When running as a frozen PyInstaller executable, MediaHub stores `library.db` and `.thumbnails/` in a writable user data directory (`%LOCALAPPDATA%\MediaHub` on Windows, `~/.local/share/mediahub` on POSIX) rather than inside the temporary `_MEIPASS` bundle directory. You can override these locations with `MEDIAHUB_DB_PATH` and `MEDIAHUB_THUMBNAILS_DIR`.
+When running as a frozen PyInstaller executable, CameoDist stores `library.db`, `.thumbnails/`, and `cameodist.log` in a writable user data directory (`%LOCALAPPDATA%\CameoDist` on Windows, `~/.local/share/cameodist` on POSIX) rather than inside the temporary `_MEIPASS` bundle directory. You can override these locations with `MEDIAHUB_DB_PATH` and `MEDIAHUB_THUMBNAILS_DIR`.
 
 ## Requirements
 

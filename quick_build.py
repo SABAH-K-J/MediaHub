@@ -1,4 +1,4 @@
-"""One-step build script: builds frontend bundle then packages MediaHub executable."""
+"""One-step build script: builds frontend bundle then packages CameoDist executable."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def main() -> None:
         sys.exit(1)
 
     print("=" * 60)
-    print("MediaHub Quick Build")
+    print("CameoDist Quick Build")
     print("=" * 60)
 
     print("\n[1/2] Building React frontend...")

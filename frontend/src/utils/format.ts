@@ -45,6 +45,20 @@ export function buildStreamUrl(filePath: string): string {
   return `${base}/api/stream?path=${encodeURIComponent(encodePathB64(filePath))}`;
 }
 
+export function buildTranscodeStreamUrl(
+  filePath: string,
+  audioIndex: number,
+  startSec = 0,
+): string {
+  const base = resolveApiBase();
+  const params = new URLSearchParams({
+    path: encodePathB64(filePath),
+    audio: String(Math.max(0, audioIndex)),
+    start: Math.max(0, startSec).toFixed(3),
+  });
+  return `${base}/api/stream/transcode?${params.toString()}`;
+}
+
 export function resolveAssetUrl(relativePath: string | null | undefined): string | null {
   if (!relativePath) return null;
   if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {

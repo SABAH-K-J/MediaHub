@@ -1,6 +1,6 @@
-# Contributing to MediaHub
+# Contributing to CameoDist
 
-Thank you for your interest in contributing to MediaHub! 🎉
+Thank you for your interest in contributing to CameoDist!
 
 ## How to Contribute
 

@@ -24,7 +24,7 @@ class LibraryRoot(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     path: str = Field(unique=True, index=True)
     label: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: Optional[datetime] = Field(default_factory=utc_now)
 
 
 class VideoProgress(SQLModel, table=True):
@@ -40,6 +40,8 @@ class VideoProgress(SQLModel, table=True):
     resolution: Optional[str] = Field(default=None)
     size_bytes: Optional[int] = Field(default=None, ge=0)
     thumbnail_path: Optional[str] = Field(default=None)
+    preferred_audio_index: Optional[int] = Field(default=None, ge=0)
+    preferred_subtitle_id: Optional[str] = Field(default=None)
 
 
 def _configure_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> None:
@@ -89,6 +91,8 @@ def _apply_safe_column_migrations(target_engine: Engine) -> None:
         ],
         "videoprogress": [
             ("file_hash", "TEXT DEFAULT ''"),
+            ("preferred_audio_index", "INTEGER"),
+            ("preferred_subtitle_id", "TEXT"),
         ],
     }
 
@@ -101,6 +105,11 @@ def _apply_safe_column_migrations(target_engine: Engine) -> None:
             for col_name, col_def in columns:
                 if col_name not in existing_cols:
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
+
+        conn.execute(
+            text("UPDATE libraryroot SET created_at = :now WHERE created_at IS NULL"),
+            {"now": utc_now().isoformat()},
+        )
 
 
 def create_db_and_tables(target_engine: Optional[Engine] = None) -> None:

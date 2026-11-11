@@ -1,4 +1,4 @@
-"""Typed configuration and runtime paths for MediaHub."""
+"""Typed configuration and runtime paths for CameoDist."""
 
 from __future__ import annotations
 
@@ -28,10 +28,10 @@ def get_default_data_dir() -> Path:
     if _is_frozen():
         if os.name == "nt":
             base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-            return base / "MediaHub"
+            return base / "CameoDist"
         xdg = os.environ.get("XDG_DATA_HOME")
         base = Path(xdg) if xdg else (Path.home() / ".local" / "share")
-        return base / "mediahub"
+        return base / "cameodist"
     return Path(__file__).resolve().parent.parent
 
 

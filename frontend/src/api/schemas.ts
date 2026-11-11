@@ -81,9 +81,109 @@ export const VideoProgressSchema = z.object({
   resolution: z.string().nullable().optional(),
   size_bytes: z.number().nullable().optional(),
   thumbnail_url: z.string().nullable().optional(),
+  preferred_audio_index: z.number().int().nullable().optional(),
+  preferred_subtitle_id: z.string().nullable().optional(),
 });
 
 export type VideoProgress = z.infer<typeof VideoProgressSchema>;
+
+export const AudioTrackSchema = z.object({
+  audio_index: z.number().int().min(0),
+  stream_index: z.number().int().min(0),
+  codec: z.string(),
+  language: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  channels: z.number().int().nullable().optional(),
+  channel_layout: z.string().nullable().optional(),
+  is_default: z.boolean().default(false),
+  browser_compatible: z.boolean().default(false),
+});
+
+export type AudioTrack = z.infer<typeof AudioTrackSchema>;
+
+export const SubtitleTrackSchema = z.object({
+  id: z.string().min(1),
+  source: z.enum(['embedded', 'external']),
+  stream_index: z.number().int().nullable().optional(),
+  subtitle_index: z.number().int().nullable().optional(),
+  filename: z.string().nullable().optional(),
+  codec: z.string(),
+  language: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  is_default: z.boolean().default(false),
+  is_forced: z.boolean().default(false),
+  text_based: z.boolean().default(true),
+});
+
+export type SubtitleTrack = z.infer<typeof SubtitleTrackSchema>;
+
+export const ChapterCategorySchema = z.enum([
+  'intro',
+  'recap',
+  'outro',
+  'credits',
+  'preview',
+  'main',
+]);
+
+export type ChapterCategory = z.infer<typeof ChapterCategorySchema>;
+
+export const ChapterSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  start_sec: z.number().min(0),
+  end_sec: z.number().min(0),
+  category: ChapterCategorySchema,
+});
+
+export type Chapter = z.infer<typeof ChapterSchema>;
+
+export const MediaInfoSchema = z.object({
+  file_path: z.string(),
+  duration: z.number().nullable().optional(),
+  container_ext: z.string(),
+  video_codec: z.string().nullable().optional(),
+  width: z.number().int().nullable().optional(),
+  height: z.number().int().nullable().optional(),
+  can_direct_play: z.boolean().default(true),
+  audio_tracks: z.array(AudioTrackSchema),
+  subtitle_tracks: z.array(SubtitleTrackSchema),
+  chapters: z.array(ChapterSchema),
+  preferred_audio_index: z.number().int().nullable().optional(),
+  preferred_subtitle_id: z.string().nullable().optional(),
+  prev_item: BrowseItemSchema.nullable().optional(),
+  next_item: BrowseItemSchema.nullable().optional(),
+});
+
+export type MediaInfo = z.infer<typeof MediaInfoSchema>;
+
+export const PlayerCustomizationSchema = z.object({
+  playbackSpeed: z.number().min(0.25).max(4).default(1),
+  seekStepSec: z.number().int().min(1).max(120).default(10),
+  fitMode: z.enum(['contain', 'cover', 'fill']).default('contain'),
+  hudMode: z.enum(['hover_area', 'auto_hide', 'always']).default('hover_area'),
+  controlsAutoHideSec: z.number().int().min(0).max(30).default(3),
+  showRemainingTime: z.boolean().default(false),
+  subtitleMode: z.enum(['native', 'custom']).default('native'),
+  subtitleFontFamily: z.enum(['gotham', 'sans', 'serif', 'mono']).default('gotham'),
+  subtitleFontSize: z.enum(['sm', 'md', 'lg', 'xl']).default('md'),
+  subtitleColor: z.enum(['white', 'amber', 'cyan']).default('white'),
+  subtitleBackdrop: z.enum(['shadow', 'translucent', 'solid']).default('shadow'),
+  subtitleOutline: z.enum(['none', 'thin', 'medium', 'heavy']).default('medium'),
+  subtitleBottomPct: z.number().min(4).max(28).default(8),
+  subtitleOffsetSec: z.number().min(-15).max(15).default(0),
+  autoSkipIntro: z.boolean().default(true),
+  autoSkipRecap: z.boolean().default(true),
+  autoSkipOutro: z.boolean().default(false),
+  autoSkipPreview: z.boolean().default(false),
+  autoSkipCountdownSec: z.union([z.literal(0), z.literal(3)]).default(3),
+  autoPlayNextEpisode: z.boolean().default(true),
+  autoNextCountdownSec: z.union([z.literal(5), z.literal(10)]).default(5),
+});
+
+export type PlayerCustomization = z.infer<typeof PlayerCustomizationSchema>;
+
+export const DEFAULT_PLAYER_CUSTOMIZATION: PlayerCustomization = PlayerCustomizationSchema.parse({});
 
 export const PlayResponseSchema = z.object({
   status: z.literal('playback started'),

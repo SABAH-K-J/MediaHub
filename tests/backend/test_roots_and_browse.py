@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 from sqlmodel import Session
 
 from backend.database import VideoProgress, get_engine
@@ -169,4 +170,42 @@ def test_contains_video_handles_symlink_loops_safely(
         return
 
     assert _contains_video(str(media_root), max_depth=12) is False
+
+
+def test_legacy_libraryroot_without_created_at_migrates_cleanly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sqlite3
+
+    from backend.api import create_app
+    from backend.config import clear_settings_cache
+    from backend.database import build_sqlite_engine, create_db_and_tables, set_engine
+
+    legacy_db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(legacy_db)
+    conn.execute("CREATE TABLE libraryroot (id INTEGER PRIMARY KEY, path TEXT UNIQUE)")
+    conn.execute("INSERT INTO libraryroot (id, path) VALUES (1, ?)", (str(tmp_path),))
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("MEDIAHUB_DB_PATH", str(legacy_db))
+    monkeypatch.setenv("MEDIAHUB_THUMBNAILS_DIR", str(tmp_path / "thumbs"))
+    clear_settings_cache()
+    eng = build_sqlite_engine(f"sqlite:///{legacy_db.as_posix()}")
+    set_engine(eng)
+    try:
+        create_db_and_tables(eng)
+        with TestClient(create_app()) as test_client:
+            res = test_client.get("/api/roots")
+            assert res.status_code == 200
+            data = res.json()
+            assert len(data) == 1
+            assert data[0]["path"] == str(tmp_path)
+            assert data[0]["created_at"] is not None
+    finally:
+        eng.dispose()
+        set_engine(None)
+        clear_settings_cache()
+
 

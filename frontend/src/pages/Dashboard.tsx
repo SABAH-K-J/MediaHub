@@ -24,7 +24,7 @@ import {
   PlayerPreference,
   PlayerPreferenceSchema,
 } from '../api/schemas';
-import { BrowserPlayerModal } from '../components/BrowserPlayerModal';
+import { CustomPlayerModal } from '../components/player/CustomPlayerModal';
 import { HeaderBar } from '../components/HeaderBar';
 import { MediaRow } from '../components/MediaRow';
 import { SettingsModal } from '../components/SettingsModal';
@@ -37,9 +37,9 @@ function loadSavedPlayerPref(): PlayerPreference {
   try {
     const raw = window.localStorage.getItem(PLAYER_PREF_STORAGE_KEY);
     const parsed = PlayerPreferenceSchema.safeParse(raw);
-    return parsed.success ? parsed.data : 'auto';
+    return parsed.success ? parsed.data : 'browser';
   } catch {
-    return 'auto';
+    return 'browser';
   }
 }
 
@@ -442,7 +442,7 @@ export function Dashboard() {
         </main>
       </div>
 
-      <BrowserPlayerModal
+      <CustomPlayerModal
         item={browserPlayerItem}
         onClose={() => {
           setBrowserPlayerItem(null);
@@ -450,6 +450,11 @@ export function Dashboard() {
           void getLastWatched().then(setLastWatched).catch(() => undefined);
         }}
         onProgressSynced={() => {
+          void getLastWatched().then(setLastWatched).catch(() => undefined);
+        }}
+        onSelectEpisode={(nextItem) => {
+          setBrowserPlayerItem(nextItem);
+          if (currentPath) void loadFolder(currentPath, false);
           void getLastWatched().then(setLastWatched).catch(() => undefined);
         }}
       />

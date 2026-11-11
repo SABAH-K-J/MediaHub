@@ -68,7 +68,7 @@ def main() -> None:
     frontend_proc: subprocess.Popen[bytes] | None = None
 
     try:
-        print("Starting MediaHub backend...")
+        print("Starting CameoDist backend...")
         backend_proc = subprocess.Popen(
             [
                 sys.executable,
@@ -79,6 +79,9 @@ def main() -> None:
                 host,
                 "--port",
                 port,
+                "--reload",
+                "--reload-dir",
+                "backend",
             ],
             cwd=str(ROOT_DIR),
             **popen_kwargs,  # type: ignore[arg-type]
@@ -87,15 +90,22 @@ def main() -> None:
         health_url = f"http://{host}:{port}/api/health"
         if not _wait_for_http(health_url, timeout_sec=15.0):
             print("Warning: backend health endpoint did not respond within 15s.", file=sys.stderr)
+        if backend_proc.poll() is not None:
+            print(
+                f"Error: backend exited early (code {backend_proc.returncode}). "
+                f"Ensure port {port} is not already in use by an older server.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
-        print("Starting MediaHub Vite frontend...")
+        print("Starting CameoDist Vite frontend...")
         frontend_proc = subprocess.Popen(
             [npm_bin, "run", "dev"],
             cwd=str(FRONTEND_DIR),
             **popen_kwargs,  # type: ignore[arg-type]
         )
 
-        print(f"MediaHub dev servers running:\n  Frontend: http://localhost:5173\n  Backend:  http://{host}:{port}")
+        print(f"CameoDist dev servers running:\n  Frontend: http://localhost:5173\n  Backend:  http://{host}:{port}")
         print("Press Ctrl+C to stop both servers.")
 
         while True:
@@ -107,7 +117,7 @@ def main() -> None:
                 break
             time.sleep(0.5)
     except KeyboardInterrupt:
-        print("\nShutting down MediaHub dev servers...")
+        print("\nShutting down CameoDist dev servers...")
     finally:
         _terminate_process_tree(frontend_proc)
         _terminate_process_tree(backend_proc)

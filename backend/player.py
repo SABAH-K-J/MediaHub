@@ -69,8 +69,8 @@ def is_mpv_available() -> bool:
 
 def _build_ipc_socket_path(session_id: str) -> str:
     if os.name == "nt":
-        return rf"\\.\pipe\mediahub_mpv_{session_id}"
-    return os.path.join(tempfile.gettempdir(), f"mediahub_mpv_{session_id}.sock")
+        return rf"\\.\pipe\cameodist_mpv_{session_id}"
+    return os.path.join(tempfile.gettempdir(), f"cameodist_mpv_{session_id}.sock")
 
 
 class MpvSession:
