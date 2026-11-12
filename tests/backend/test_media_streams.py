@@ -1,12 +1,10 @@
-"""Tests for media stream inspection, chapter classification, WebVTT subtitles, and transcode streaming."""
+"""Tests for media stream inspection, chapters, WebVTT subtitles, and transcode streaming."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from backend.media_streams import (
     build_transcode_command,
     classify_chapter_category,
@@ -14,6 +12,7 @@ from backend.media_streams import (
     parse_ffprobe_media_info,
 )
 from backend.security import encode_b64_path
+from fastapi.testclient import TestClient
 
 
 def test_classify_chapter_category_rules() -> None:
@@ -32,14 +31,26 @@ def test_classify_chapter_category_rules() -> None:
 def test_parse_ffprobe_media_info_with_sidecar_subtitles(tmp_path: Path) -> None:
     video = tmp_path / "Show.S01E01.mkv"
     video.write_bytes(b"video")
-    (tmp_path / "Show.S01E01.en.srt").write_text("1\n00:00:01,000 --> 00:00:03,000\nHi\n", encoding="utf-8")
-    (tmp_path / "Show.S01E01.jp.forced.vtt").write_text("WEBVTT\n\n00:01.000 --> 00:02.000\nSign\n", encoding="utf-8")
-    (tmp_path / "Unrelated.en.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nNo\n", encoding="utf-8")
+    (tmp_path / "Show.S01E01.en.srt").write_text(
+        "1\n00:00:01,000 --> 00:00:03,000\nHi\n", encoding="utf-8"
+    )
+    (tmp_path / "Show.S01E01.jp.forced.vtt").write_text(
+        "WEBVTT\n\n00:01.000 --> 00:02.000\nSign\n", encoding="utf-8"
+    )
+    (tmp_path / "Unrelated.en.srt").write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\nNo\n", encoding="utf-8"
+    )
 
     raw = {
         "format": {"duration": "1420.5"},
         "streams": [
-            {"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080},
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+            },
             {
                 "index": 1,
                 "codec_type": "audio",
@@ -77,7 +88,11 @@ def test_parse_ffprobe_media_info_with_sidecar_subtitles(tmp_path: Path) -> None
             {"start_time": "0.0", "end_time": "90.0", "tags": {"title": "Opening"}},
             {"start_time": "90.0", "end_time": "1300.0", "tags": {"title": "Main Story"}},
             {"start_time": "1300.0", "end_time": "1390.0", "tags": {"title": "Ending"}},
-            {"start_time": "1390.0", "end_time": "1420.5", "tags": {"title": "Next Episode Preview"}},
+            {
+                "start_time": "1390.0",
+                "end_time": "1420.5",
+                "tags": {"title": "Next Episode Preview"},
+            },
         ],
     }
 
@@ -107,12 +122,16 @@ def test_convert_srt_to_vtt_and_transcode_command() -> None:
     assert vtt.startswith("WEBVTT\n\n")
     assert "00:01:02.345 --> 00:01:05.678" in vtt
 
-    cmd_h264 = build_transcode_command("ffmpeg", "/media/ep.mkv", audio_index=1, start_sec=42.5, video_codec="h264")
+    cmd_h264 = build_transcode_command(
+        "ffmpeg", "/media/ep.mkv", audio_index=1, start_sec=42.5, video_codec="h264"
+    )
     assert "-ss" in cmd_h264 and "42.500" in cmd_h264
     assert "0:a:1?" in cmd_h264
     assert "-c:v" in cmd_h264 and "copy" in cmd_h264
 
-    cmd_hevc = build_transcode_command("ffmpeg", "/media/ep.mkv", audio_index=0, start_sec=0.0, video_codec="hevc")
+    cmd_hevc = build_transcode_command(
+        "ffmpeg", "/media/ep.mkv", audio_index=0, start_sec=0.0, video_codec="hevc"
+    )
     assert "libx264" in cmd_hevc
 
 
@@ -136,7 +155,8 @@ def test_media_info_subtitles_preferences_and_security(
     # Security: outside root rejected with 403
     outside_b64 = encode_b64_path(str(outside / "secret.mp4"))
     assert client.get("/api/media/info", params={"path": outside_b64}).status_code == 403
-    assert client.get("/api/subtitles", params={"path": outside_b64, "id": "ext:a.srt"}).status_code == 403
+    sub_res = client.get("/api/subtitles", params={"path": outside_b64, "id": "ext:a.srt"})
+    assert sub_res.status_code == 403
     assert client.get("/api/stream/transcode", params={"path": outside_b64}).status_code == 403
 
     video_b64 = encode_b64_path(str(video))
@@ -172,7 +192,9 @@ def test_media_info_subtitles_preferences_and_security(
     assert bad_sub.status_code == 400
 
     # Transcode returns 503 cleanly when ffmpeg is missing
-    transcode_res = client.get("/api/stream/transcode", params={"path": video_b64, "audio": 0, "start": 0})
+    transcode_res = client.get(
+        "/api/stream/transcode", params={"path": video_b64, "audio": 0, "start": 0}
+    )
     assert transcode_res.status_code == 503
 
 
@@ -191,7 +213,8 @@ def test_adjacent_episodes_natural_order_and_ass_subtitles(
         "[Script Info]\nPlayResX: 1920\nPlayResY: 1080\n\n"
         "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour\n"
         "Style: Default,Arial,54,&H00FFFFFF\n\n"
-        "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         "Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,{\\an8}Sign Text\n"
     )
     (media_root / "Show Ep 2.en.ass").write_text(ass_content, encoding="utf-8")

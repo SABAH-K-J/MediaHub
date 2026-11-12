@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import Engine
 from sqlmodel import Session
@@ -23,11 +23,11 @@ from backend.security import canonicalize_path, normalize_for_compare
 
 logger = logging.getLogger(__name__)
 
-MPV_SESSIONS: dict[str, "MpvSession"] = {}
+MPV_SESSIONS: dict[str, MpvSession] = {}
 _sessions_lock = threading.Lock()
 
 
-def _find_mpv() -> Optional[str]:
+def _find_mpv() -> str | None:
     """Locate the mpv binary using settings, PATH, and standard OS install paths."""
     configured = get_settings().mpv_executable
     if os.path.isfile(configured):
@@ -79,8 +79,8 @@ class MpvSession:
     def __init__(
         self,
         file_path: str,
-        start_sec: Optional[float] = None,
-        target_engine: Optional[Engine] = None,
+        start_sec: float | None = None,
+        target_engine: Engine | None = None,
     ) -> None:
         self.file_path = canonicalize_path(file_path)
         self.session_key = normalize_for_compare(self.file_path)
@@ -88,14 +88,14 @@ class MpvSession:
         self.start_sec = start_sec
         self._engine = target_engine
 
-        self.time_pos: Optional[float] = None
-        self.duration: Optional[float] = None
+        self.time_pos: float | None = None
+        self.duration: float | None = None
         self._lock = threading.Lock()
         self._pipe_name = _build_ipc_socket_path(self.session_id)
 
-        self.proc: Optional[subprocess.Popen[bytes]] = None
-        self._ipc_thread: Optional[threading.Thread] = None
-        self._watcher_thread: Optional[threading.Thread] = None
+        self.proc: subprocess.Popen[bytes] | None = None
+        self._ipc_thread: threading.Thread | None = None
+        self._watcher_thread: threading.Thread | None = None
         self._stop_ipc = threading.Event()
 
     def build_command(self, mpv_path: str) -> list[str]:
@@ -161,7 +161,7 @@ class MpvSession:
         finally:
             try:
                 mpv_ipc.terminate()
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
     def _watcher_loop(self) -> None:
@@ -191,8 +191,8 @@ class MpvSession:
 
     def _write_progress_to_db(
         self,
-        time_pos: Optional[float],
-        duration: Optional[float],
+        time_pos: float | None,
+        duration: float | None,
     ) -> None:
         if time_pos is None or time_pos < 0:
             return
@@ -236,7 +236,11 @@ class MpvSession:
         with self._lock:
             pos = self.time_pos
             dur = self.duration
-        progress = (min(max(pos / dur, 0.0), 1.0)) if (pos is not None and dur and dur > 0) else None
+        progress = (
+            min(max(pos / dur, 0.0), 1.0)
+            if (pos is not None and dur is not None and dur > 0)
+            else None
+        )
         return {
             "active": True,
             "file_path": self.file_path,
@@ -246,7 +250,7 @@ class MpvSession:
         }
 
 
-def play_media_file(file_path: str, target_engine: Optional[Engine] = None) -> None:
+def play_media_file(file_path: str, target_engine: Engine | None = None) -> None:
     """Launch mpv for file_path, resuming from any stored position."""
     canon_path = canonicalize_path(file_path)
     if not os.path.isfile(canon_path):
@@ -275,7 +279,7 @@ def play_media_file(file_path: str, target_engine: Optional[Engine] = None) -> N
         MPV_SESSIONS[session_key] = session_obj
 
 
-def get_playback_progress(file_path: str) -> Optional[dict[str, Any]]:
+def get_playback_progress(file_path: str) -> dict[str, Any] | None:
     """Return live progress snapshot for an active mpv session, or None."""
     try:
         session_key = normalize_for_compare(file_path)

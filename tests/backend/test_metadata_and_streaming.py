@@ -8,12 +8,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session
-
 from backend.database import VideoProgress, get_engine
 from backend.metadata import compute_seek_seconds, extract_metadata_and_thumbnail
 from backend.security import canonicalize_path, encode_b64_path
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 
 def test_compute_seek_seconds_clamps_short_clips() -> None:

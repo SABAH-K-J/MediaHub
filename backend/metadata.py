@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional
 
 from sqlalchemy import Engine
 from sqlalchemy.exc import IntegrityError
@@ -35,7 +34,7 @@ def generate_file_hash(file_path: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _resolve_executable(configured: str) -> Optional[str]:
+def _resolve_executable(configured: str) -> str | None:
     if os.path.isfile(configured):
         return configured
     return shutil.which(configured)
@@ -51,7 +50,7 @@ def is_ffprobe_available() -> bool:
     return _resolve_executable(get_settings().ffprobe_executable) is not None
 
 
-def _windows_startupinfo() -> Optional[subprocess.STARTUPINFO]:  # type: ignore[name-defined]
+def _windows_startupinfo() -> subprocess.STARTUPINFO | None:  # type: ignore[name-defined]
     if os.name == "nt":
         info = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
         info.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
@@ -59,7 +58,7 @@ def _windows_startupinfo() -> Optional[subprocess.STARTUPINFO]:  # type: ignore[
     return None
 
 
-def compute_seek_seconds(duration: Optional[float]) -> float:
+def compute_seek_seconds(duration: float | None) -> float:
     """Compute a safe thumbnail seek timestamp clamped inside video duration."""
     if duration is None or duration <= 0:
         return 5.0
@@ -70,7 +69,7 @@ def compute_seek_seconds(duration: Optional[float]) -> float:
     return min(max(1.0, duration * 0.1), duration - 1.0)
 
 
-def _format_resolution(height: Optional[int]) -> Optional[str]:
+def _format_resolution(height: int | None) -> str | None:
     if not height or height <= 0:
         return None
     if height >= 2160:
@@ -86,7 +85,7 @@ def _format_resolution(height: Optional[int]) -> Optional[str]:
     return f"{height}p"
 
 
-def _probe_video(ffprobe_bin: str, file_path: str) -> tuple[Optional[float], Optional[str]]:
+def _probe_video(ffprobe_bin: str, file_path: str) -> tuple[float | None, str | None]:
     """Run ffprobe with timeout and return (duration_sec, resolution_label)."""
     cmd = [
         ffprobe_bin,
@@ -125,7 +124,7 @@ def _probe_video(ffprobe_bin: str, file_path: str) -> tuple[Optional[float], Opt
     streams = data.get("streams") or []
     stream_info = streams[0] if isinstance(streams, list) and streams else {}
 
-    duration: Optional[float] = None
+    duration: float | None = None
     dur_raw = format_info.get("duration") or stream_info.get("duration")
     if dur_raw is not None:
         try:
@@ -136,7 +135,7 @@ def _probe_video(ffprobe_bin: str, file_path: str) -> tuple[Optional[float], Opt
             duration = None
 
     height_raw = stream_info.get("height")
-    resolution: Optional[str] = None
+    resolution: str | None = None
     if height_raw is not None:
         try:
             resolution = _format_resolution(int(height_raw))
@@ -150,7 +149,7 @@ def _generate_thumbnail(
     ffmpeg_bin: str,
     file_path: str,
     thumb_path: Path,
-    duration: Optional[float],
+    duration: float | None,
 ) -> bool:
     """Capture one JPEG thumbnail frame with timeout. Return True on success."""
     thumb_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,7 +187,7 @@ def _generate_thumbnail(
 
 def extract_metadata_and_thumbnail(
     file_path: str,
-    target_engine: Optional[Engine] = None,
+    target_engine: Engine | None = None,
 ) -> None:
     """Extract duration, resolution, size, and thumbnail for a video file safely."""
     try:
@@ -223,14 +222,14 @@ def extract_metadata_and_thumbnail(
             ):
                 return
 
-        size_bytes: Optional[int] = None
+        size_bytes: int | None = None
         try:
             size_bytes = os.path.getsize(canon_path)
         except OSError:
             pass
 
-        duration: Optional[float] = None
-        resolution: Optional[str] = None
+        duration: float | None = None
+        resolution: str | None = None
         ffprobe_bin = _resolve_executable(settings.ffprobe_executable)
         if ffprobe_bin:
             duration, resolution = _probe_video(ffprobe_bin, canon_path)

@@ -6,13 +6,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import pytest
-from sqlmodel import Session
-
 from backend.database import VideoProgress, get_engine
 from backend.metadata import generate_file_hash
 from backend.security import canonicalize_path, encode_b64_path
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 
 def test_roots_crud_and_validation(

@@ -12,11 +12,12 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Optional
+from typing import Any
 
 import uvicorn
 
-# Ensure project root is on sys.path whether executed as `python backend/main.py` or `-m backend.main`
+# Ensure project root is on sys.path whether executed as
+# `python backend/main.py` or `-m backend.main`
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
@@ -43,7 +44,7 @@ def _configure_desktop_logging() -> None:
             sys.stderr = _log_stream  # type: ignore[assignment]
         try:
             faulthandler.enable(file=_log_stream, all_threads=True)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         logging.basicConfig(
@@ -53,7 +54,11 @@ def _configure_desktop_logging() -> None:
             force=True,
         )
 
-        def _log_unhandled(exc_type: type[BaseException], exc_val: BaseException, exc_tb: Any) -> None:
+        def _log_unhandled(
+            exc_type: type[BaseException],
+            exc_val: BaseException,
+            exc_tb: Any,
+        ) -> None:
             logging.critical("Unhandled exception", exc_info=(exc_type, exc_val, exc_tb))
 
         sys.excepthook = _log_unhandled
@@ -76,7 +81,7 @@ def _wait_for_server(url: str, timeout_sec: float = 15.0) -> bool:
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=1.0) as resp:
+            with urllib.request.urlopen(url, timeout=1.0) as resp:  # noqa: S310
                 if resp.status == 200:
                     return True
         except (urllib.error.URLError, TimeoutError, OSError):
@@ -91,7 +96,7 @@ class DesktopBridge:
     JS serializer never recurses into .NET AccessibilityObject properties.
     """
 
-    def pick_folder(self) -> Optional[str]:
+    def pick_folder(self) -> str | None:
         """Open a native OS directory picker dialog and return the chosen path."""
         win = _active_window
         if win is None:

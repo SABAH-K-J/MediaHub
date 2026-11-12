@@ -6,11 +6,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
-
 from backend.database import get_engine
 from backend.player import MPV_SESSIONS, MpvSession
 from backend.security import canonicalize_path, encode_b64_path, normalize_for_compare
+from fastapi.testclient import TestClient
 
 
 def test_watch_unwatch_progress_sync_and_last_watched(

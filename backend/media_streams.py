@@ -12,7 +12,7 @@ import threading
 from collections import OrderedDict
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import Response
 from fastapi.responses import StreamingResponse
@@ -60,7 +60,7 @@ def natural_sort_key(name: str) -> list[tuple[int, int | str]]:
     return [(0, int(p)) if p.isdigit() else (1, p) for p in parts if p]
 
 
-def find_adjacent_episodes(file_path: str) -> tuple[Optional[str], Optional[str]]:
+def find_adjacent_episodes(file_path: str) -> tuple[str | None, str | None]:
     """Return canonical (prev_path, next_path) among video siblings in the same folder."""
     canon_path = canonicalize_path(file_path)
     parent_dir = Path(canon_path).parent
@@ -95,10 +95,10 @@ class AudioTrackInfo(StrictStreamModel):
     audio_index: int
     stream_index: int
     codec: str
-    language: Optional[str] = None
-    title: Optional[str] = None
-    channels: Optional[int] = None
-    channel_layout: Optional[str] = None
+    language: str | None = None
+    title: str | None = None
+    channels: int | None = None
+    channel_layout: str | None = None
     is_default: bool = False
     browser_compatible: bool = False
 
@@ -106,12 +106,12 @@ class AudioTrackInfo(StrictStreamModel):
 class SubtitleTrackInfo(StrictStreamModel):
     id: str
     source: Literal["embedded", "external"]
-    stream_index: Optional[int] = None
-    subtitle_index: Optional[int] = None
-    filename: Optional[str] = None
+    stream_index: int | None = None
+    subtitle_index: int | None = None
+    filename: str | None = None
     codec: str
-    language: Optional[str] = None
-    title: Optional[str] = None
+    language: str | None = None
+    title: str | None = None
     is_default: bool = False
     is_forced: bool = False
     text_based: bool = True
@@ -127,24 +127,24 @@ class ChapterInfo(StrictStreamModel):
 
 class MediaInfo(StrictStreamModel):
     file_path: str
-    duration: Optional[float] = None
+    duration: float | None = None
     container_ext: str
-    video_codec: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
+    video_codec: str | None = None
+    width: int | None = None
+    height: int | None = None
     can_direct_play: bool = True
     audio_tracks: list[AudioTrackInfo]
     subtitle_tracks: list[SubtitleTrackInfo]
     chapters: list[ChapterInfo]
 
 
-def _resolve_bin(configured: str) -> Optional[str]:
+def _resolve_bin(configured: str) -> str | None:
     if os.path.isfile(configured):
         return configured
     return shutil.which(configured)
 
 
-def _windows_startupinfo() -> Optional[subprocess.STARTUPINFO]:  # type: ignore[name-defined]
+def _windows_startupinfo() -> subprocess.STARTUPINFO | None:  # type: ignore[name-defined]
     if os.name == "nt":
         info = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
         info.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
@@ -170,7 +170,7 @@ def classify_chapter_category(title: str) -> ChapterCategory:
     return "main"
 
 
-def _parse_optional_float(value: Any) -> Optional[float]:
+def _parse_optional_float(value: Any) -> float | None:
     if value is None:
         return None
     try:
@@ -254,9 +254,9 @@ def parse_ffprobe_media_info(file_path: str, data: dict[str, Any]) -> MediaInfo:
     raw_chapters = data.get("chapters") or []
 
     duration = _parse_optional_float(format_info.get("duration"))
-    video_codec: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
+    video_codec: str | None = None
+    width: int | None = None
+    height: int | None = None
 
     audio_tracks: list[AudioTrackInfo] = []
     subtitle_tracks: list[SubtitleTrackInfo] = []
@@ -471,7 +471,7 @@ def extract_subtitle_payload(
             _vtt_cache.move_to_end(cache_key)
             return cached
 
-    ffmpeg_fmt = "ass" if output_format == "ass" else "webvtt"
+    ffmpeg_fmt: Literal["webvtt", "ass"] = "ass" if output_format == "ass" else "webvtt"
     output: str
     if track_id.startswith("ext:"):
         filename = track_id[4:]
@@ -489,7 +489,9 @@ def extract_subtitle_payload(
                 ffmpeg_bin = _resolve_bin(get_settings().ffmpeg_executable)
                 if not ffmpeg_bin:
                     raise RuntimeError("FFmpeg is required to convert subtitles to ASS.")
-                output = _run_ffmpeg_subtitle(ffmpeg_bin, str(sub_path), subtitle_idx=0, output_format="ass")
+                output = _run_ffmpeg_subtitle(
+                    ffmpeg_bin, str(sub_path), subtitle_idx=0, output_format="ass"
+                )
             else:
                 raise ValueError("Unsupported subtitle extension.")
         elif ext == ".vtt":
@@ -501,7 +503,9 @@ def extract_subtitle_payload(
             ffmpeg_bin = _resolve_bin(get_settings().ffmpeg_executable)
             if not ffmpeg_bin:
                 raise RuntimeError("FFmpeg is required to convert ASS/SSA subtitles.")
-            output = _run_ffmpeg_subtitle(ffmpeg_bin, str(sub_path), subtitle_idx=0, output_format="webvtt")
+            output = _run_ffmpeg_subtitle(
+                ffmpeg_bin, str(sub_path), subtitle_idx=0, output_format="webvtt"
+            )
         else:
             raise ValueError("Unsupported subtitle extension.")
     elif track_id.startswith("emb:"):
@@ -587,7 +591,7 @@ def build_transcode_command(
     file_path: str,
     audio_index: int = 0,
     start_sec: float = 0.0,
-    video_codec: Optional[str] = None,
+    video_codec: str | None = None,
 ) -> list[str]:
     """Construct ffmpeg command to output a fragmented MP4 stream for browser playback."""
     clamped_start = max(0.0, start_sec)

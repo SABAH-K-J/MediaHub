@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Iterator
-from typing import Optional
 
 from fastapi import Response
 from fastapi.responses import StreamingResponse
@@ -80,7 +79,7 @@ def _iter_file_range(file_path: str, start: int, length: int) -> Iterator[bytes]
             yield chunk
 
 
-def stream_video_file(file_path: str, range_header: Optional[str]) -> Response:
+def stream_video_file(file_path: str, range_header: str | None) -> Response:
     """Return a 200 or 206 StreamingResponse (or 416 Response) for a video file."""
     file_size = os.path.getsize(file_path)
     mime_type = guess_video_mime(file_path)

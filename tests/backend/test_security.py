@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from backend.security import (
     decode_b64_path,
     encode_b64_path,
@@ -15,6 +13,7 @@ from backend.security import (
     sanitize_display_name,
     validate_file_hash,
 )
+from fastapi.testclient import TestClient
 
 
 def test_encode_and_decode_b64_unicode_paths() -> None:

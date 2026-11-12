@@ -6,16 +6,17 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from backend.api import create_app
 from backend.config import clear_settings_cache
 from backend.database import build_sqlite_engine, create_db_and_tables, set_engine
 from backend.player import MPV_SESSIONS
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
-def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[dict[str, Path], None, None]:
+def isolated_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[dict[str, Path], None, None]:
     """Provide isolated SQLite DB, thumbnails directory, and sample media root."""
     db_path = tmp_path / "test_library.db"
     thumbs_dir = tmp_path / "thumbnails"

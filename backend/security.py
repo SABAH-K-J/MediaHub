@@ -7,7 +7,6 @@ import binascii
 import os
 import re
 from collections.abc import Sequence
-from typing import Optional
 
 VIDEO_EXTENSIONS: frozenset[str] = frozenset(
     {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".webm", ".m4v"}
@@ -40,10 +39,10 @@ def is_path_within_root(target_path: str, root_path: str) -> bool:
         return False
 
 
-def find_containing_root(target_path: str, roots: Sequence[str]) -> Optional[str]:
+def find_containing_root(target_path: str, roots: Sequence[str]) -> str | None:
     """Return the deepest registered root containing target_path, or None."""
     canon_target = canonicalize_path(target_path)
-    best_root: Optional[str] = None
+    best_root: str | None = None
     best_len = -1
 
     for root in roots:

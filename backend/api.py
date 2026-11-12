@@ -7,14 +7,14 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from backend import __version__
 from backend.config import get_bundle_root, get_settings
@@ -74,14 +74,14 @@ class HealthResponse(StrictModel):
 
 class RootAddRequest(StrictModel):
     path: str = Field(min_length=1, max_length=4096)
-    label: Optional[str] = Field(default=None, max_length=120)
+    label: str | None = Field(default=None, max_length=120)
 
 
 class LibraryRootRead(StrictModel):
     id: int
     path: str
-    label: Optional[str]
-    created_at: Optional[datetime] = None
+    label: str | None
+    created_at: datetime | None = None
 
 
 class DeleteRootResponse(StrictModel):
@@ -100,18 +100,18 @@ class BrowseItem(StrictModel):
     is_dir: bool
     watched: bool = False
     progress_ratio: float = 0.0
-    last_position_sec: Optional[float] = None
-    resolution: Optional[str] = None
-    duration: Optional[float] = None
-    size_bytes: Optional[int] = None
-    watch_date: Optional[datetime] = None
-    thumbnail_url: Optional[str] = None
+    last_position_sec: float | None = None
+    resolution: str | None = None
+    duration: float | None = None
+    size_bytes: int | None = None
+    watch_date: datetime | None = None
+    thumbnail_url: str | None = None
 
 
 class BrowseResponse(StrictModel):
     current_path: str
     root_path: str
-    parent_path: Optional[str]
+    parent_path: str | None
     breadcrumbs: list[BreadcrumbItem]
     items: list[BrowseItem]
 
@@ -120,10 +120,10 @@ class LastWatchedItem(StrictModel):
     file_path: str
     name: str
     progress_ratio: float
-    last_position_sec: Optional[float] = None
-    duration: Optional[float] = None
+    last_position_sec: float | None = None
+    duration: float | None = None
     watch_date: datetime
-    thumbnail_url: Optional[str] = None
+    thumbnail_url: str | None = None
 
 
 class FilePathRequest(StrictModel):
@@ -133,45 +133,45 @@ class FilePathRequest(StrictModel):
 class FileProgressRequest(StrictModel):
     file_path: str = Field(min_length=1, max_length=8192)
     position_sec: float = Field(ge=0.0)
-    duration_sec: Optional[float] = Field(default=None, ge=0.0)
+    duration_sec: float | None = Field(default=None, ge=0.0)
 
 
 class FilePreferencesRequest(StrictModel):
     file_path: str = Field(min_length=1, max_length=8192)
-    preferred_audio_index: Optional[int] = Field(default=None, ge=0)
-    preferred_subtitle_id: Optional[str] = Field(default=None, max_length=256)
+    preferred_audio_index: int | None = Field(default=None, ge=0)
+    preferred_subtitle_id: str | None = Field(default=None, max_length=256)
 
 
 class MediaInfoResponse(StrictModel):
     file_path: str
-    duration: Optional[float] = None
+    duration: float | None = None
     container_ext: str
-    video_codec: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
+    video_codec: str | None = None
+    width: int | None = None
+    height: int | None = None
     can_direct_play: bool
     audio_tracks: list[AudioTrackInfo]
     subtitle_tracks: list[SubtitleTrackInfo]
     chapters: list[ChapterInfo]
-    preferred_audio_index: Optional[int] = None
-    preferred_subtitle_id: Optional[str] = None
-    prev_item: Optional[BrowseItem] = None
-    next_item: Optional[BrowseItem] = None
+    preferred_audio_index: int | None = None
+    preferred_subtitle_id: str | None = None
+    prev_item: BrowseItem | None = None
+    next_item: BrowseItem | None = None
 
 
 class VideoProgressRead(StrictModel):
     file_path: str
     file_hash: str
-    duration: Optional[float] = None
-    last_position_sec: Optional[float] = None
+    duration: float | None = None
+    last_position_sec: float | None = None
     progress_ratio: float
     watched: bool
-    watch_date: Optional[datetime] = None
-    resolution: Optional[str] = None
-    size_bytes: Optional[int] = None
-    thumbnail_url: Optional[str] = None
-    preferred_audio_index: Optional[int] = None
-    preferred_subtitle_id: Optional[str] = None
+    watch_date: datetime | None = None
+    resolution: str | None = None
+    size_bytes: int | None = None
+    thumbnail_url: str | None = None
+    preferred_audio_index: int | None = None
+    preferred_subtitle_id: str | None = None
 
 
 class PlayResponse(StrictModel):
@@ -181,10 +181,10 @@ class PlayResponse(StrictModel):
 
 class PlayProgressResponse(StrictModel):
     active: bool
-    file_path: Optional[str] = None
-    time_pos: Optional[float] = None
-    duration: Optional[float] = None
-    progress: Optional[float] = None
+    file_path: str | None = None
+    time_pos: float | None = None
+    duration: float | None = None
+    progress: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +224,7 @@ def _authorize_video_file(encoded_path: str, session: Session) -> str:
 def _build_browse_item(
     display_name: str,
     file_canon: str,
-    vp: Optional[VideoProgress],
+    vp: VideoProgress | None,
 ) -> BrowseItem:
     if vp is not None:
         file_hash = vp.file_hash or generate_file_hash(file_canon)
@@ -248,7 +248,7 @@ def _build_browse_item(
         )
 
     try:
-        size_bytes: Optional[int] = os.path.getsize(file_canon)
+        size_bytes: int | None = os.path.getsize(file_canon)
     except OSError:
         size_bytes = None
     return BrowseItem(
@@ -269,7 +269,7 @@ def _to_library_root_read(root: LibraryRoot) -> LibraryRootRead:
 
 
 def _to_video_progress_read(vp: VideoProgress) -> VideoProgressRead:
-    thumb_url: Optional[str] = None
+    thumb_url: str | None = None
     if vp.thumbnail_path and os.path.isfile(vp.thumbnail_path) and vp.file_hash:
         thumb_url = f"/api/thumbnails/{vp.file_hash}"
     return VideoProgressRead(
@@ -290,7 +290,7 @@ def _to_video_progress_read(vp: VideoProgress) -> VideoProgressRead:
 
 def _contains_video(
     dir_path: str,
-    visited: Optional[set[tuple[int, int]]] = None,
+    visited: set[tuple[int, int]] | None = None,
     depth: int = 0,
     max_depth: int = 12,
 ) -> bool:
@@ -421,7 +421,7 @@ def create_app() -> FastAPI:
 
     @application.get("/api/roots", response_model=list[LibraryRootRead])
     def get_roots(session: Session = Depends(get_session)) -> list[LibraryRootRead]:
-        roots = session.exec(select(LibraryRoot).order_by(LibraryRoot.id)).all()
+        roots = session.exec(select(LibraryRoot).order_by(col(LibraryRoot.id))).all()
         return [_to_library_root_read(root) for root in roots]
 
     @application.post("/api/roots", response_model=LibraryRootRead)
@@ -539,7 +539,7 @@ def create_app() -> FastAPI:
         sorted_files = _sort_files(file_items, sort)
 
         if normalize_for_compare(canon_path) == normalize_for_compare(containing_root):
-            parent_path: Optional[str] = None
+            parent_path: str | None = None
         else:
             candidate_parent = os.path.dirname(canon_path)
             if (
@@ -602,8 +602,8 @@ def create_app() -> FastAPI:
                 break
         return results
 
-    @application.get("/api/last-watched", response_model=Optional[LastWatchedItem])
-    def get_last_watched(session: Session = Depends(get_session)) -> Optional[LastWatchedItem]:
+    @application.get("/api/last-watched", response_model=LastWatchedItem | None)
+    def get_last_watched(session: Session = Depends(get_session)) -> LastWatchedItem | None:
         items = _query_recent_in_progress(session, limit=1)
         return items[0] if items else None
 

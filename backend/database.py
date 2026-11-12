@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import Engine, event, text
 from sqlalchemy.pool import StaticPool
@@ -21,10 +21,10 @@ def utc_now() -> datetime:
 class LibraryRoot(SQLModel, table=True):
     """Registered local root directory allowed for browsing and streaming."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     path: str = Field(unique=True, index=True)
-    label: Optional[str] = Field(default=None)
-    created_at: Optional[datetime] = Field(default_factory=utc_now)
+    label: str | None = Field(default=None)
+    created_at: datetime | None = Field(default_factory=utc_now)
 
 
 class VideoProgress(SQLModel, table=True):
@@ -32,16 +32,16 @@ class VideoProgress(SQLModel, table=True):
 
     file_path: str = Field(primary_key=True)
     file_hash: str = Field(default="", index=True)
-    duration: Optional[float] = Field(default=None, ge=0.0)
-    last_position_sec: Optional[float] = Field(default=None, ge=0.0)
+    duration: float | None = Field(default=None, ge=0.0)
+    last_position_sec: float | None = Field(default=None, ge=0.0)
     progress_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
     watched: bool = Field(default=False)
-    watch_date: Optional[datetime] = Field(default=None)
-    resolution: Optional[str] = Field(default=None)
-    size_bytes: Optional[int] = Field(default=None, ge=0)
-    thumbnail_path: Optional[str] = Field(default=None)
-    preferred_audio_index: Optional[int] = Field(default=None, ge=0)
-    preferred_subtitle_id: Optional[str] = Field(default=None)
+    watch_date: datetime | None = Field(default=None)
+    resolution: str | None = Field(default=None)
+    size_bytes: int | None = Field(default=None, ge=0)
+    thumbnail_path: str | None = Field(default=None)
+    preferred_audio_index: int | None = Field(default=None, ge=0)
+    preferred_subtitle_id: str | None = Field(default=None)
 
 
 def _configure_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> None:
@@ -64,7 +64,7 @@ def build_sqlite_engine(database_url: str, in_memory: bool = False) -> Engine:
     return eng
 
 
-_engine: Optional[Engine] = None
+_engine: Engine | None = None
 
 
 def get_engine() -> Engine:
@@ -76,7 +76,7 @@ def get_engine() -> Engine:
     return _engine
 
 
-def set_engine(new_engine: Optional[Engine]) -> None:
+def set_engine(new_engine: Engine | None) -> None:
     """Override or reset the module-level SQLAlchemy engine (intended for tests)."""
     global _engine
     _engine = new_engine
@@ -112,7 +112,7 @@ def _apply_safe_column_migrations(target_engine: Engine) -> None:
         )
 
 
-def create_db_and_tables(target_engine: Optional[Engine] = None) -> None:
+def create_db_and_tables(target_engine: Engine | None = None) -> None:
     """Create SQLModel tables and apply non-destructive column migrations."""
     eng = target_engine or get_engine()
     SQLModel.metadata.create_all(eng)
