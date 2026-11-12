@@ -64,3 +64,4 @@ jobs:
             dist/CameoDist.exe
             dist/CameoDist-SHA256.txt
           generate_release_notes: true
+
